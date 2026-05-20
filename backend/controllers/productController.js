@@ -1,5 +1,98 @@
 const AutoPart = require('../models/AutoPart.js');
 const Notification = require('../models/Notification.js');
+const axios = require('axios');
+
+// Helper to decode VIN using NHTSA API with local fallback
+const decodeVinHelper = async (vin) => {
+    try {
+        if (!vin || vin.length < 10) return null;
+        const response = await axios.get(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevinvalues/${vin}?format=json`);
+        if (response.data && response.data.Results && response.data.Results.length > 0) {
+            const data = response.data.Results[0];
+            if (data.Make) {
+                return {
+                    make: data.Make,
+                    model: data.Model || '',
+                    year: data.ModelYear ? Number(data.ModelYear) : null
+                };
+            }
+        }
+    } catch (error) {
+        console.error('NHTSA VIN decoding error:', error.message);
+    }
+    // Fallback Mock parsing for local/demonstration purposes
+    const mockVINs = {
+        'J2CARTOYOTACAMRY': { make: 'Toyota', model: 'Camry', year: 2020 },
+        'J2CARHONDACIVIC9': { make: 'Honda', model: 'Civic', year: 2022 },
+        'J2CARFORDMUSTANG': { make: 'Ford', model: 'Mustang', year: 2018 }
+    };
+    const cleanVin = vin.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    for (const [key, value] of Object.entries(mockVINs)) {
+        if (cleanVin.includes(key)) {
+            return value;
+        }
+    }
+    return null;
+};
+
+// @desc    Decode VIN to vehicle info
+// @route   GET /api/products/decode-vin/:vin
+// @access  Public
+const decodeVinEndpoint = async (req, res) => {
+    try {
+        const { vin } = req.params;
+        const decoded = await decodeVinHelper(vin.toUpperCase());
+        if (!decoded) {
+            return res.status(404).json({ message: 'Không thể giải mã số VIN này hoặc thông tin không tồn tại' });
+        }
+        res.json(decoded);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get all unique compatible cars (brands, models, years)
+// @route   GET /api/products/compatibilities
+// @access  Public
+const getCompatibilities = async (req, res) => {
+    try {
+        const parts = await AutoPart.find({ 'carCompatibilities.0': { $exists: true } }).select('carCompatibilities');
+        const brands = new Set();
+        const modelsByBrand = {};
+        const years = new Set();
+
+        parts.forEach(part => {
+            (part.carCompatibilities || []).forEach(compat => {
+                if (compat.carBrand) {
+                    const b = compat.carBrand.trim();
+                    brands.add(b);
+                    if (!modelsByBrand[b]) modelsByBrand[b] = new Set();
+                    if (compat.carModel) {
+                        modelsByBrand[b].add(compat.carModel.trim());
+                    }
+                }
+                if (compat.carYear) {
+                    years.add(compat.carYear);
+                }
+            });
+        });
+
+        // Seed some common brands and models as fallback
+        const standardBrands = ['Toyota', 'Honda', 'Ford', 'Hyundai', 'Kia', 'BMW', 'Mercedes-Benz', 'Mazda'];
+        standardBrands.forEach(b => brands.add(b));
+
+        res.json({
+            brands: Array.from(brands).sort(),
+            modelsByBrand: Object.fromEntries(
+                Object.entries(modelsByBrand).map(([k, v]) => [k, Array.from(v).sort()])
+            ),
+            years: Array.from(years).sort((a, b) => b - a)
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 
 
 // @desc    Fetch all auto parts with optional search, filter, pagination
@@ -8,7 +101,7 @@ const Notification = require('../models/Notification.js');
 // ..
 const getProducts = async (req, res) => {
     try {
-        const { keyword, category, brand, minPrice, maxPrice, page = 1, limit = 12 } = req.query;
+        const { keyword, category, brand, minPrice, maxPrice, carBrand, carModel, carYear, partType, vin, page = 1, limit = 12 } = req.query;
 
         const filter = {};
 
@@ -19,12 +112,81 @@ const getProducts = async (req, res) => {
                 { description: { $regex: keyword, $options: 'i' } },
             ];
         }
-        if (category) filter.category = category;
+        if (category) {
+            const mongoose = require('mongoose');
+            if (mongoose.Types.ObjectId.isValid(category)) {
+                filter.category = category;
+            } else {
+                // Find category by name or slug
+                const Category = require('../models/Category.js');
+                const cat = await Category.findOne({
+                    $or: [
+                        { name: { $regex: new RegExp(`^${category}$`, 'i') } },
+                        { slug: { $regex: new RegExp(`^${category.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w-]+/g, '')}$`, 'i') } }
+                    ]
+                });
+                if (cat) {
+                    filter.category = cat._id;
+                } else {
+                    // Force no results if category name was provided but not found
+                    filter.category = new mongoose.Types.ObjectId();
+                }
+            }
+        }
         if (brand) filter.brand = { $regex: brand, $options: 'i' };
+        if (partType) filter.partType = partType;
         if (minPrice || maxPrice) {
             filter.price = {};
             if (minPrice) filter.price.$gte = Number(minPrice);
             if (maxPrice) filter.price.$lte = Number(maxPrice);
+        }
+
+        // Vehicle compatibility filtering
+        const compatConditions = {};
+        if (carBrand) compatConditions.carBrand = { $regex: new RegExp(`^${carBrand}$`, 'i') };
+        if (carModel) compatConditions.carModel = { $regex: new RegExp(`^${carModel}$`, 'i') };
+        if (carYear) compatConditions.carYear = Number(carYear);
+
+        if (Object.keys(compatConditions).length > 0) {
+            filter.carCompatibilities = { $elemMatch: compatConditions };
+        }
+
+        // VIN Lookup handling
+        if (vin) {
+            const vinStr = String(vin).trim().toUpperCase();
+            const decoded = await decodeVinHelper(vinStr);
+
+            const vinConditions = [
+                { compatibleVINs: vinStr }
+            ];
+
+            if (decoded && decoded.make) {
+                const compatMatch = {
+                    carBrand: { $regex: new RegExp(`^${decoded.make}$`, 'i') }
+                };
+                if (decoded.model) {
+                    compatMatch.carModel = { $regex: new RegExp(`^${decoded.model}$`, 'i') };
+                }
+                if (decoded.year) {
+                    compatMatch.carYear = decoded.year;
+                }
+                vinConditions.push({
+                    carCompatibilities: {
+                        $elemMatch: compatMatch
+                    }
+                });
+            }
+
+            if (filter.$or) {
+                const existingOr = filter.$or;
+                delete filter.$or;
+                filter.$and = [
+                    { $or: existingOr },
+                    { $or: vinConditions }
+                ];
+            } else {
+                filter.$or = vinConditions;
+            }
         }
 
         const pageNum = Math.max(1, Number(page));
@@ -75,7 +237,7 @@ const getProductById = async (req, res) => {
 // @access  Private/Admin
 const createProduct = async (req, res) => {
     try {
-        const { name, category, price, description, stock, imageUrl, brand, sku, isActive } = req.body;
+        const { name, category, price, description, stock, imageUrl, brand, sku, isActive, carCompatibilities, partType, compatibleVINs } = req.body;
 
         // Validate category exists
         const Category = require('../models/Category.js');
@@ -103,6 +265,9 @@ const createProduct = async (req, res) => {
             sku: sku || undefined,
             isActive: isActive !== undefined ? isActive : true,
             createdBy: req.user._id,
+            carCompatibilities: carCompatibilities ? (typeof carCompatibilities === 'string' ? JSON.parse(carCompatibilities) : carCompatibilities) : [],
+            partType: partType || 'Aftermarket',
+            compatibleVINs: compatibleVINs ? (typeof compatibleVINs === 'string' ? compatibleVINs.split(',').map(v => v.trim()) : compatibleVINs) : [],
         });
 
         const created = await product.save();
@@ -123,7 +288,7 @@ const updateProduct = async (req, res) => {
             return res.status(404).json({ message: 'Product not found' });
         }
 
-        const { name, category, price, description, stock, imageUrl, brand, sku, isActive } = req.body;
+        const { name, category, price, description, stock, imageUrl, brand, sku, isActive, carCompatibilities, partType, compatibleVINs } = req.body;
 
         // Validate category if changed
         if (category && category !== String(product.category)) {
@@ -151,6 +316,15 @@ const updateProduct = async (req, res) => {
         product.brand = brand ?? product.brand;
         if (sku !== undefined) product.sku = sku;
         if (isActive !== undefined) product.isActive = isActive;
+        if (carCompatibilities !== undefined) {
+            product.carCompatibilities = typeof carCompatibilities === 'string' ? JSON.parse(carCompatibilities) : carCompatibilities;
+        }
+        if (partType !== undefined) {
+            product.partType = partType;
+        }
+        if (compatibleVINs !== undefined) {
+            product.compatibleVINs = typeof compatibleVINs === 'string' ? compatibleVINs.split(',').map(v => v.trim()) : compatibleVINs;
+        }
 
         const updated = await product.save();
         await updated.populate('category', 'name slug');
@@ -346,4 +520,6 @@ module.exports = {
     createProductReview,
     updateProductReview,
     deleteProductReview,
+    decodeVinEndpoint,
+    getCompatibilities,
 };

@@ -29,6 +29,14 @@ const ProductEdit = () => {
     const [brand, setBrand] = useState('');
     const [sku, setSku] = useState('');
     const [isActive, setIsActive] = useState(true);
+    const [partType, setPartType] = useState('Aftermarket');
+    const [carCompatibilities, setCarCompatibilities] = useState([]);
+    const [compatibleVINs, setCompatibleVINs] = useState('');
+
+    // Local states for adding compatibility item
+    const [compatBrand, setCompatBrand] = useState('');
+    const [compatModel, setCompatModel] = useState('');
+    const [compatYear, setCompatYear] = useState('');
 
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(isEditMode);
@@ -62,6 +70,9 @@ const ProductEdit = () => {
                     setBrand(data.brand);
                     setSku(data.sku || '');
                     setIsActive(data.isActive);
+                    setPartType(data.partType || 'Aftermarket');
+                    setCarCompatibilities(data.carCompatibilities || []);
+                    setCompatibleVINs((data.compatibleVINs || []).join(', '));
                 } catch (err) {
                     setError(err.response?.data?.message || err.message);
                 } finally {
@@ -91,6 +102,9 @@ const ProductEdit = () => {
                 brand,
                 sku: sku || undefined,
                 isActive,
+                partType,
+                carCompatibilities,
+                compatibleVINs,
             };
             if (isEditMode) {
                 await updateProduct(id, payload);
@@ -280,6 +294,122 @@ const ProductEdit = () => {
                             />
                             {stock <= 5 && stock >= 0 && (
                                 <p className="text-xs text-red-400">⚠️ Tồn kho thấp!</p>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Vehicle Fitment & Part Classification */}
+                <Card className="bg-[#18181b] border-slate-800 shadow-xl shadow-black/20">
+                    <CardHeader>
+                        <CardTitle className="text-white flex items-center gap-2 text-base">
+                            Tương thích xe & Phân loại
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        {/* Part Origin classification */}
+                        <div className="space-y-2">
+                            <Label className="text-slate-300">Phân loại phụ tùng (Origin Type)</Label>
+                            <Select value={partType} onValueChange={setPartType}>
+                                <SelectTrigger className="bg-[#09090b] border-slate-700 text-white">
+                                    <SelectValue placeholder="Chọn phân loại" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-[#18181b] border-slate-700 text-white">
+                                    <SelectItem value="OEM">OEM (Linh kiện chính hãng gốc)</SelectItem>
+                                    <SelectItem value="OES">OES (Linh kiện chính hãng thay thế)</SelectItem>
+                                    <SelectItem value="Aftermarket">Aftermarket (Linh kiện của bên thứ ba)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Compatible VINs */}
+                        <div className="space-y-2">
+                            <Label htmlFor="compatibleVINs" className="text-slate-300">Danh sách số VIN tương thích (cách nhau bằng dấu phẩy)</Label>
+                            <Textarea
+                                id="compatibleVINs"
+                                value={compatibleVINs}
+                                onChange={(e) => setCompatibleVINs(e.target.value)}
+                                placeholder="VD: J2CARTOYOTACAMRY, J2CARHONDACIVIC9"
+                                rows={2}
+                                className="bg-[#09090b] border-slate-700 text-white placeholder:text-slate-600"
+                            />
+                        </div>
+
+                        {/* Compatibility List & Form */}
+                        <div className="border-t border-slate-800 pt-4 space-y-4">
+                            <Label className="text-slate-300 block">Thêm đời xe tương thích</Label>
+                            <div className="grid gap-3 grid-cols-1 md:grid-cols-4 items-end bg-[#09090b]/50 p-4 border border-slate-800 rounded-sm">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] text-slate-400">Hãng xe</Label>
+                                    <Input
+                                        value={compatBrand}
+                                        onChange={(e) => setCompatBrand(e.target.value)}
+                                        placeholder="VD: Toyota"
+                                        className="bg-[#09090b] border-slate-700 text-white placeholder:text-slate-600 text-xs"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] text-slate-400">Dòng xe</Label>
+                                    <Input
+                                        value={compatModel}
+                                        onChange={(e) => setCompatModel(e.target.value)}
+                                        placeholder="VD: Camry"
+                                        className="bg-[#09090b] border-slate-700 text-white placeholder:text-slate-600 text-xs"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] text-slate-400">Năm sản xuất</Label>
+                                    <Input
+                                        type="number"
+                                        value={compatYear}
+                                        onChange={(e) => setCompatYear(e.target.value)}
+                                        placeholder="VD: 2020"
+                                        className="bg-[#09090b] border-slate-700 text-white placeholder:text-slate-600 text-xs"
+                                    />
+                                </div>
+                                <Button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!compatBrand || !compatModel || !compatYear) {
+                                            alert('Vui lòng điền đủ thông tin hãng xe, dòng xe và năm sản xuất!');
+                                            return;
+                                        }
+                                        const newItem = {
+                                            carBrand: compatBrand.trim(),
+                                            carModel: compatModel.trim(),
+                                            carYear: Number(compatYear)
+                                        };
+                                        setCarCompatibilities([...carCompatibilities, newItem]);
+                                        setCompatBrand('');
+                                        setCompatModel('');
+                                        setCompatYear('');
+                                    }}
+                                    className="bg-slate-800 hover:bg-slate-700 text-white text-xs py-2 w-full border-slate-700"
+                                >
+                                    Thêm xe
+                                </Button>
+                            </div>
+
+                            {/* Added list */}
+                            {carCompatibilities.length > 0 && (
+                                <div className="space-y-2 mt-4 max-h-48 overflow-y-auto border border-slate-800 p-2 rounded-sm custom-scrollbar">
+                                    {carCompatibilities.map((item, idx) => (
+                                        <div key={idx} className="flex justify-between items-center bg-[#09090b]/80 border border-slate-800 rounded px-3 py-2 text-xs">
+                                            <span className="font-bold text-slate-200">
+                                                {item.carBrand} {item.carModel} ({item.carYear})
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCarCompatibilities(carCompatibilities.filter((_, i) => i !== idx));
+                                                }}
+                                                className="text-red-400 hover:text-red-300 font-bold"
+                                            >
+                                                Xóa
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     </CardContent>
