@@ -41,6 +41,7 @@ import OrderInfo from './pages/admin/OrderInfo';
 import ReviewList from './pages/admin/ReviewList';
 import CouponManagement from './pages/admin/CouponManagement';
 import Offers from './pages/Offers';
+import Schematic from './pages/Schematic';
 
 
 
@@ -71,6 +72,7 @@ function App() {
           <Route path="/part/:id" element={<PartDetail />} />
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/cart" element={<Cart />} />
+          <Route path="/schematic" element={<Schematic />} />
           <Route element={<PrivateRoute />}>
             <Route path="/profile" element={<Profile />} />
             <Route path="/wishlist" element={<Wishlist />} />

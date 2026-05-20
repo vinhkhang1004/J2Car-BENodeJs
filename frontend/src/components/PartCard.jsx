@@ -22,11 +22,24 @@ const PartCard = ({ part }) => {
 
   return (
     <div className="group relative bg-white border border-slate-100 rounded-xl overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-blue-900/10 hover:-translate-y-2">
-      {/* Category Badge */}
-      <div className="absolute top-4 left-4 z-10">
+      {/* Category & PartType Badges */}
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-1.5 items-start">
         <span className="px-3 py-1 bg-blue-900/90 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-widest rounded-sm">
-          {typeof part.category === 'object' ? part.category?.name : part.category || 'Linh kiện'}
+          {typeof part.category === 'object' && part.category?.name 
+            ? part.category.name 
+            : (part.category && !/^[0-9a-fA-F]{24}$/.test(part.category) ? part.category : 'Linh kiện')}
         </span>
+        {part.partType && (
+          <span className={`px-2.5 py-0.5 backdrop-blur-md text-[8px] font-black uppercase tracking-widest rounded-sm ${
+            part.partType === 'OEM' 
+              ? 'bg-blue-600/90 text-white' 
+              : part.partType === 'OES' 
+                ? 'bg-emerald-600/90 text-white' 
+                : 'bg-slate-700/90 text-white'
+          }`}>
+            {part.partType}
+          </span>
+        )}
       </div>
 
       {/* Wishlist Button */}

@@ -10,12 +10,20 @@ const {
     createProductReview,
     updateProductReview,
     deleteProductReview,
+    decodeVinEndpoint,
+    getCompatibilities,
 } = require('../controllers/productController.js');
 const { protect, admin } = require('../middleware/authMiddleware.js');
 
 // IMPORTANT: Specific routes MUST be declared before /:id to avoid conflicts
 // Admin stats route
 router.route('/admin/stats').get(protect, admin, getAdminStats);
+
+// Compatibility lookup for filtering
+router.route('/compatibilities').get(getCompatibilities);
+
+// VIN Decoding lookup
+router.route('/decode-vin/:vin').get(decodeVinEndpoint);
 
 // Public routes
 router.route('/').get(getProducts).post(protect, admin, createProduct);

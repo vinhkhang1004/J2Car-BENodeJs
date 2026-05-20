@@ -29,6 +29,7 @@ const getParts = async (req, res) => {
 
         const count = await AutoPart.countDocuments(query);
         const parts = await AutoPart.find(query)
+            .populate('category', 'name slug')
             .limit(pageSize)
             .skip(pageSize * (page - 1))
             .sort({ createdAt: -1 });

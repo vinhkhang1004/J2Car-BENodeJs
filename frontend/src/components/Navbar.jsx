@@ -45,6 +45,7 @@ const Navbar = () => {
                 <div className="hidden md:flex items-center gap-10 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                     <Link to="/" className="hover:text-blue-700 transition-colors pb-1 border-b-2 border-transparent">Trang chủ</Link>
                     <Link to="/shop" className="hover:text-blue-700 transition-colors pb-1 border-b-2 border-transparent">Sản phẩm</Link>
+                    <Link to="/schematic" className="hover:text-blue-700 transition-colors pb-1 border-b-2 border-transparent">Sơ đồ xe</Link>
                     <Link to="/offers" className="hover:text-orange-500 transition-colors pb-1 border-b-2 border-transparent flex items-center gap-1">
                         <Zap size={10} className="fill-orange-500 text-orange-500" /> Ưu đãi
                     </Link>
@@ -85,7 +86,7 @@ const Navbar = () => {
                             placeholder="Tìm linh kiện..." 
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-full text-xs font-medium w-48 focus:w-64 focus:outline-none focus:border-orange-500 transition-all"
+                            className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-full text-xs font-medium text-slate-800 w-48 focus:w-64 focus:outline-none focus:border-orange-500 transition-all"
                         />
                         <button type="submit" className="absolute right-3 text-slate-400 hover:text-orange-500">
                             <Search size={14} />
@@ -159,7 +160,7 @@ const Navbar = () => {
                             placeholder="Tìm kiếm..." 
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl text-sm font-medium w-full focus:outline-none focus:border-orange-500"
+                            className="bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl text-sm font-medium text-slate-800 w-full focus:outline-none focus:border-orange-500"
                         />
                         <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
                             <Search size={18} />
@@ -168,6 +169,7 @@ const Navbar = () => {
                     <div className="flex flex-col gap-4 text-sm font-bold text-slate-500 uppercase tracking-widest">
                         <Link to="/" onClick={() => setIsMenuOpen(false)} className="hover:text-blue-700">Trang chủ</Link>
                         <Link to="/shop" onClick={() => setIsMenuOpen(false)} className="hover:text-blue-700">Sản phẩm</Link>
+                        <Link to="/schematic" onClick={() => setIsMenuOpen(false)} className="hover:text-blue-700">Sơ đồ xe</Link>
                         <div className="pt-4 mt-4 border-t border-slate-50">
                             <p className="text-[10px] text-slate-400 mb-2">Danh mục</p>
                             <div className="grid grid-cols-2 gap-3">

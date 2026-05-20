@@ -146,8 +146,17 @@ const updateOrderToDelivered = async (req, res) => {
         order.isDelivered = true;
         order.deliveredAt = Date.now();
         order.status = 'Delivered';
+        
+        // When delivered, assume it's paid (especially for COD)
+        if (!order.isPaid) {
+            console.log(`[DEBUG] Dang cap nhat thanh toan cho don hang: ${order._id}`);
+            order.isPaid = true;
+            order.paidAt = Date.now();
+        }
 
         const updatedOrder = await order.save();
+
+
         res.json(updatedOrder);
     } else {
         res.status(404);
@@ -184,7 +193,19 @@ const updateOrderStatus = async (req, res) => {
     if (order) {
         const oldStatus = order.status;
         order.status = req.body.status || order.status;
+
+        // If status changed to Delivered, mark as paid
+        const isDeliveredStatus = req.body.status && req.body.status.toLowerCase() === 'delivered';
+        if (isDeliveredStatus && !order.isPaid) {
+            order.isPaid = true;
+            order.paidAt = Date.now();
+            order.isDelivered = true;
+            order.deliveredAt = Date.now();
+        }
+
+
         const updatedOrder = await order.save();
+
 
         // Send email if status changed
         if (oldStatus !== updatedOrder.status) {
@@ -247,6 +268,9 @@ const getDashboardStats = async (req, res) => {
             statusCounts,
             recentOrders,
             revenueByDay,
+            topProducts,
+            bottomProducts,
+            topSpenders,
         ] = await Promise.all([
             Order.countDocuments(),
             Order.countDocuments({ createdAt: { $gte: startOfThisMonth } }),
@@ -277,6 +301,69 @@ const getDashboardStats = async (req, res) => {
                 },
                 { $sort: { _id: 1 } }
             ]),
+            // Top products
+            Order.aggregate([
+                { $match: { status: { $ne: 'Cancelled' } } },
+                { $unwind: '$orderItems' },
+                {
+                    $group: {
+                        _id: '$orderItems.product',
+                        name: { $first: '$orderItems.name' },
+                        image: { $first: '$orderItems.image' },
+                        qtySold: { $sum: '$orderItems.qty' },
+                        totalRevenue: { $sum: { $multiply: ['$orderItems.qty', '$orderItems.price'] } }
+                    }
+                },
+                { $sort: { qtySold: -1 } },
+                { $limit: 5 }
+            ]),
+            // Bottom products
+            Order.aggregate([
+                { $match: { status: { $ne: 'Cancelled' } } },
+                { $unwind: '$orderItems' },
+                {
+                    $group: {
+                        _id: '$orderItems.product',
+                        name: { $first: '$orderItems.name' },
+                        image: { $first: '$orderItems.image' },
+                        qtySold: { $sum: '$orderItems.qty' },
+                        totalRevenue: { $sum: { $multiply: ['$orderItems.qty', '$orderItems.price'] } }
+                    }
+                },
+                { $sort: { qtySold: 1 } },
+                { $limit: 5 }
+            ]),
+            // Top spenders
+            Order.aggregate([
+                { $match: { status: { $ne: 'Cancelled' } } },
+                {
+                    $group: {
+                        _id: '$user',
+                        totalSpent: { $sum: '$totalPrice' },
+                        orderCount: { $sum: 1 }
+                    }
+                },
+                { $sort: { totalSpent: -1 } },
+                { $limit: 5 },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'user'
+                    }
+                },
+                { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+                {
+                    $project: {
+                        _id: 1,
+                        totalSpent: 1,
+                        orderCount: 1,
+                        name: '$user.name',
+                        email: '$user.email'
+                    }
+                }
+            ]),
         ]);
 
         const totalRevenue = revenueResult[0]?.total || 0;
@@ -293,6 +380,9 @@ const getDashboardStats = async (req, res) => {
             statusCounts,
             recentOrders,
             revenueByDay,
+            topProducts,
+            bottomProducts,
+            topSpenders,
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
