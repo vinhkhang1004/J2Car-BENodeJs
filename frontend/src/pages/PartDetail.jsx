@@ -179,9 +179,22 @@ const PartDetail = () => {
                     {/* Right: Product Info */}
                     <div className="space-y-10">
                         <div>
-                            <span className="text-[10px] font-black text-blue-700 uppercase tracking-[0.3em] bg-blue-50 px-3 py-1 rounded-full mb-6 inline-block">
-                                {part.brand || 'Premium Quality'}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-3 mb-6">
+                                <span className="text-[10px] font-black text-blue-700 uppercase tracking-[0.3em] bg-blue-50 px-3 py-1 rounded-full inline-block">
+                                    {part.brand || 'Premium Quality'}
+                                </span>
+                                {part.partType && (
+                                    <span className={`text-[10px] font-black uppercase tracking-[0.25em] px-3 py-1 rounded-full inline-block ${
+                                        part.partType === 'OEM'
+                                            ? 'bg-blue-600/10 text-blue-600'
+                                            : part.partType === 'OES'
+                                                ? 'bg-emerald-600/10 text-emerald-600'
+                                                : 'bg-slate-700/10 text-slate-700'
+                                    }`}>
+                                        {part.partType}
+                                    </span>
+                                )}
+                            </div>
                             <h1 className="text-4xl md:text-5xl font-black text-blue-950 leading-tight tracking-tighter uppercase mb-2">
                                 {part.name}
                             </h1>
@@ -197,27 +210,61 @@ const PartDetail = () => {
                             </p>
                         </div>
 
-                        {/* Compatibility Check Mock */}
-                        <div className="bg-slate-50 p-6 border border-slate-100 rounded-sm">
-                            <div className="flex items-center gap-2 mb-6">
-                                <Info size={16} className="text-orange-500" />
-                                <span className="text-[11px] font-black text-blue-950 uppercase tracking-widest">Kiểm tra tương thích</span>
+                        {/* Dynamic Compatibility List & VIN Matcher */}
+                        <div className="bg-slate-50 p-6 border border-slate-100 rounded-sm space-y-6">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Info size={16} className="text-blue-900" />
+                                    <span className="text-[11px] font-black text-blue-950 uppercase tracking-widest">Dòng xe tương thích</span>
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-400">
+                                    {part.carCompatibilities?.length || 0} dòng xe
+                                </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                                <select className="bg-white border border-slate-200 p-3 text-xs font-bold text-slate-400 rounded-sm outline-none">
-                                    <option>Hãng xe</option>
-                                    <option>Porsche</option>
-                                    <option>BMW</option>
-                                </select>
-                                <select className="bg-white border border-slate-200 p-3 text-xs font-bold text-slate-400 rounded-sm outline-none">
-                                    <option>Đời xe</option>
-                                    <option>2023</option>
-                                    <option>2024</option>
-                                </select>
-                            </div>
-                            <button className="w-full bg-blue-950 text-white text-[10px] font-black uppercase tracking-[0.2em] py-4 hover:bg-blue-900 transition-colors shadow-xl shadow-blue-900/20">
-                                Xác nhận phụ tùng
-                            </button>
+
+                            {/* VIN Match Confirmation */}
+                            {(() => {
+                                const urlParams = new URLSearchParams(window.location.search);
+                                const vinFilter = urlParams.get('vin');
+                                if (vinFilter) {
+                                    return (
+                                        <div className="bg-emerald-50 border border-emerald-100 rounded-sm p-4 text-emerald-800 flex items-start gap-3">
+                                            <ShieldCheck size={18} className="shrink-0 mt-0.5 text-emerald-600" />
+                                            <div>
+                                                <p className="text-xs font-black uppercase tracking-wider text-emerald-900">Khớp số VIN thành công</p>
+                                                <p className="text-[11px] font-medium mt-1">Phụ tùng này hoàn toàn tương thích với xe (VIN: {vinFilter}) của bạn.</p>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+
+                            {/* Fitment list */}
+                            {part.carCompatibilities && part.carCompatibilities.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-2 custom-scrollbar">
+                                    {part.carCompatibilities.map((compat, idx) => (
+                                        <div key={idx} className="bg-white border border-slate-100 p-2.5 rounded flex items-center gap-2 text-xs font-bold text-blue-950">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                                            <span>{compat.carBrand} {compat.carModel} ({compat.carYear})</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-slate-400 font-medium italic">Không có giới hạn dòng xe chi tiết. Phụ tùng này có thể tương thích phổ quát.</p>
+                            )}
+
+                            {/* Compatible VINs if any */}
+                            {part.compatibleVINs && part.compatibleVINs.length > 0 && (
+                                <div className="border-t border-slate-200/60 pt-4">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Số VIN được liên kết trực tiếp</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {part.compatibleVINs.map((vin, idx) => (
+                                            <span key={idx} className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider">{vin}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Price & CTA */}

@@ -85,6 +85,7 @@ const AdminDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [apiError, setApiError] = useState('');
     const navigate = useNavigate();
+    const [activeProductTab, setActiveProductTab] = useState('top');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -276,6 +277,109 @@ const AdminDashboard = () => {
                             <Link to="/admin/orders" className="flex items-center justify-center gap-2 text-sm font-bold text-primary hover:text-primary/80 transition-colors">
                                 Xem tất cả đơn hàng <ArrowRight size={14} />
                             </Link>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Statistics Section: Top/Bottom Products & Top Spenders */}
+            <div className="grid gap-6 md:grid-cols-2">
+                {/* Product Stats Card */}
+                <Card className="bg-[#18181b] border-slate-800 shadow-xl shadow-black/20 overflow-hidden">
+                    <CardHeader className="border-b border-slate-800/50 pb-4 flex flex-row items-center justify-between space-y-0">
+                        <div>
+                            <CardTitle className="text-white text-lg flex items-center gap-2">
+                                <Package size={18} className="text-primary" /> Sản phẩm nổi bật
+                            </CardTitle>
+                            <CardDescription className="text-slate-500 mt-1">Sản phẩm bán chạy & bán ít nhất</CardDescription>
+                        </div>
+                        <div className="flex bg-slate-900/60 p-1 rounded-xl border border-slate-800">
+                            <button
+                                onClick={() => setActiveProductTab('top')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                                    activeProductTab === 'top'
+                                        ? 'bg-primary text-white'
+                                        : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                Bán chạy nhất
+                            </button>
+                            <button
+                                onClick={() => setActiveProductTab('bottom')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                                    activeProductTab === 'bottom'
+                                        ? 'bg-primary text-white'
+                                        : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                Bán ít nhất
+                            </button>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="divide-y divide-slate-800/50">
+                            {(activeProductTab === 'top' ? stats?.topProducts : stats?.bottomProducts)?.length > 0 ? (
+                                (activeProductTab === 'top' ? stats?.topProducts : stats?.bottomProducts).map((product, index) => (
+                                    <div key={product._id || index} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-800/10 transition-colors">
+                                        <div className="font-bold text-slate-500 w-4 text-center">#{index + 1}</div>
+                                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center flex-shrink-0">
+                                            <img
+                                                src={product.image || '/images/default-part.jpg'}
+                                                alt={product.name}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    e.target.src = 'https://placehold.co/100x100?text=Part';
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-white font-medium text-sm truncate">{product.name || 'Không rõ tên'}</p>
+                                            <p className="text-slate-500 text-xs mt-0.5">Doanh thu: <span className="text-slate-300 font-medium">{product.totalRevenue?.toLocaleString('vi-VN')}₫</span></p>
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                                                Đã bán {product.qtySold}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-slate-500 text-sm text-center py-12">Chưa có dữ liệu thống kê sản phẩm</p>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Top Spenders Card */}
+                <Card className="bg-[#18181b] border-slate-800 shadow-xl shadow-black/20 overflow-hidden">
+                    <CardHeader className="border-b border-slate-800/50 pb-4">
+                        <CardTitle className="text-white text-lg flex items-center gap-2">
+                            <Users size={18} className="text-primary" /> Khách hàng chi tiêu nhiều nhất
+                        </CardTitle>
+                        <CardDescription className="text-slate-500">Top 5 khách hàng có tổng chi tiêu cao nhất</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="divide-y divide-slate-800/50">
+                            {stats?.topSpenders?.length > 0 ? (
+                                stats.topSpenders.map((spender, index) => (
+                                    <div key={spender._id || index} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-800/10 transition-colors">
+                                        <div className="font-bold text-slate-500 w-4 text-center">#{index + 1}</div>
+                                        <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center flex-shrink-0 text-white font-bold uppercase">
+                                            {(spender.name || 'U').slice(0, 2)}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-white font-medium text-sm truncate">{spender.name || 'Người dùng ẩn danh'}</p>
+                                            <p className="text-slate-500 text-xs truncate">{spender.email}</p>
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <p className="text-primary font-bold text-sm">{spender.totalSpent?.toLocaleString('vi-VN')}₫</p>
+                                            <p className="text-slate-500 text-xs mt-0.5">{spender.orderCount} đơn hàng</p>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-slate-500 text-sm text-center py-12">Chưa có dữ liệu chi tiêu khách hàng</p>
+                            )}
                         </div>
                     </CardContent>
                 </Card>

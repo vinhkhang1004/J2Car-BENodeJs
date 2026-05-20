@@ -217,6 +217,19 @@ const ProductDetail = () => {
                                 }
                             />
                             <Row icon={<Hash size={14} />} label="Thương hiệu" value={product.brand} />
+                            {product.partType && (
+                                <Row icon={<Info size={14} />} label="Phân loại" value={
+                                    <Badge className={`${
+                                        product.partType === 'OEM' 
+                                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
+                                            : product.partType === 'OES' 
+                                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                                : 'bg-slate-700/50 text-slate-400 border border-slate-600/50'
+                                    }`}>
+                                        {product.partType}
+                                    </Badge>
+                                } />
+                            )}
                             {product.sku && <Row icon={<Hash size={14} />} label="SKU" value={<code className="bg-slate-800 px-2 py-0.5 rounded text-xs">{product.sku}</code>} />}
                         </CardContent>
                     </Card>
@@ -247,6 +260,46 @@ const ProductDetail = () => {
                             <Row icon={<Boxes size={14} />} label="Tồn kho"
                                 value={<span className={`text-xl font-bold ${stockColor}`}>{product.stock} sản phẩm</span>}
                             />
+                        </CardContent>
+                    </Card>
+
+                    {/* Vehicle Compatibility */}
+                    <Card className="bg-[#18181b] border-slate-800 shadow-xl shadow-black/20">
+                        <CardHeader>
+                            <CardTitle className="text-white flex items-center gap-2 text-base">
+                                <Info size={16} /> Tương thích dòng xe & VIN
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div>
+                                <span className="text-xs text-slate-400 font-medium uppercase tracking-widest block mb-2">Đời xe tương thích</span>
+                                {product.carCompatibilities && product.carCompatibilities.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-slate-800 p-3 rounded-sm custom-scrollbar">
+                                        {product.carCompatibilities.map((compat, idx) => (
+                                            <div key={idx} className="bg-slate-900/60 border border-slate-800/80 p-2 rounded text-xs font-bold text-slate-300">
+                                                {compat.carBrand} {compat.carModel} ({compat.carYear})
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-slate-500 italic">Chưa cấu hình xe tương thích</p>
+                                )}
+                            </div>
+
+                            <div className="border-t border-slate-800 pt-3">
+                                <span className="text-xs text-slate-400 font-medium uppercase tracking-widest block mb-2">Mã VIN liên kết</span>
+                                {product.compatibleVINs && product.compatibleVINs.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto border border-slate-800 p-3 rounded-sm custom-scrollbar">
+                                        {product.compatibleVINs.map((vin, idx) => (
+                                            <Badge key={idx} variant="outline" className="border-slate-700 text-slate-300 font-mono text-[10px]">
+                                                {vin}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-slate-500 italic">Chưa cấu hình mã VIN tương thích</p>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
 

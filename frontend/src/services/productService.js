@@ -27,6 +27,9 @@ export const deleteProduct = (id) => api.delete(`/products/${id}`);
 
 export const fetchProductAdminStats = () => api.get('/products/admin/stats');
 
+export const fetchCompatibilities = () => api.get('/products/compatibilities');
+export const decodeVin = (vin) => api.get(`/products/decode-vin/${vin}`);
+
 // ─── UPLOAD ───────────────────────────────────────────────────
 export const uploadImage = (formData) => api.post('/upload', formData, {
     headers: {

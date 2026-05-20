@@ -94,6 +94,22 @@ const orderSchema = mongoose.Schema(
     }
 );
 
+// Auto-set paid status if delivered
+orderSchema.pre('save', function(next) {
+    if (this.status === 'Delivered') {
+        if (!this.isPaid) {
+            this.isPaid = true;
+            this.paidAt = this.paidAt || Date.now();
+        }
+        if (!this.isDelivered) {
+            this.isDelivered = true;
+            this.deliveredAt = this.deliveredAt || Date.now();
+        }
+    }
+    next();
+});
+
 const Order = mongoose.model('Order', orderSchema);
+
 
 module.exports = Order;

@@ -23,11 +23,23 @@ const Shop = () => {
     const [metadata, setMetadata] = useState({ page: 1, pages: 1, total: 0 });
     const [showMobileFilters, setShowMobileFilters] = useState(false);
 
+    // Compatibility metadata
+    const [compatData, setCompatData] = useState({ brands: [], modelsByBrand: {}, years: [] });
+    const [vinInput, setVinInput] = useState(searchParams.get('vin') || '');
+    const [decodedVehicle, setDecodedVehicle] = useState(null);
+    const [vinLoading, setVinLoading] = useState(false);
+    const [vinError, setVinError] = useState('');
+
     const [filters, setFilters] = useState({
         category: searchParams.get('category') || '',
         brand: searchParams.get('brand') || '',
         minPrice: searchParams.get('minPrice') || '',
         maxPrice: searchParams.get('maxPrice') || '',
+        carBrand: searchParams.get('carBrand') || '',
+        carModel: searchParams.get('carModel') || '',
+        carYear: searchParams.get('carYear') || '',
+        partType: searchParams.get('partType') || '',
+        vin: searchParams.get('vin') || '',
         page: Number(searchParams.get('page')) || 1
     });
 
@@ -37,16 +49,18 @@ const Shop = () => {
         max: searchParams.get('maxPrice') || ''
     });
 
-    // Fetch dynamic categories and brands
+    // Fetch dynamic categories, brands, and compatibilities
     useEffect(() => {
         const fetchMetadata = async () => {
             try {
-                const [catRes, brandRes] = await Promise.all([
+                const [catRes, brandRes, compatRes] = await Promise.all([
                     api.get('/categories?active=true'),
-                    api.get('/parts/brands')
+                    api.get('/parts/brands'),
+                    api.get('/products/compatibilities')
                 ]);
                 setCategories(catRes.data);
                 setBrands(brandRes.data);
+                setCompatData(compatRes.data || { brands: [], modelsByBrand: {}, years: [] });
             } catch (err) {
                 console.error('Error fetching metadata:', err);
             }
@@ -61,12 +75,38 @@ const Shop = () => {
             brand: searchParams.get('brand') || '',
             minPrice: searchParams.get('minPrice') || '',
             maxPrice: searchParams.get('maxPrice') || '',
+            carBrand: searchParams.get('carBrand') || '',
+            carModel: searchParams.get('carModel') || '',
+            carYear: searchParams.get('carYear') || '',
+            partType: searchParams.get('partType') || '',
+            vin: searchParams.get('vin') || '',
             page: Number(searchParams.get('page')) || 1
         });
         setLocalPrice({
             min: searchParams.get('minPrice') || '',
             max: searchParams.get('maxPrice') || ''
         });
+        if (searchParams.get('vin')) {
+            setVinInput(searchParams.get('vin'));
+        }
+    }, [searchParams]);
+
+    // Handle VIN decoding if present in URL on load/change
+    useEffect(() => {
+        const vin = searchParams.get('vin');
+        if (vin) {
+            const loadVin = async () => {
+                try {
+                    const { data } = await api.get(`/products/decode-vin/${vin}`);
+                    setDecodedVehicle(data);
+                } catch (e) {
+                    setDecodedVehicle(null);
+                }
+            };
+            loadVin();
+        } else {
+            setDecodedVehicle(null);
+        }
     }, [searchParams]);
 
     const applyPriceFilter = () => {
@@ -83,6 +123,60 @@ const Shop = () => {
         setSearchParams(cleanParams);
     };
 
+    const handleVinSearch = async (e) => {
+        e.preventDefault();
+        setVinError('');
+        setVinLoading(true);
+        setDecodedVehicle(null);
+        if (!vinInput || vinInput.trim().length < 10) {
+            setVinError('Số VIN phải tối thiểu 10 ký tự');
+            setVinLoading(false);
+            return;
+        }
+        try {
+            const { data } = await api.get(`/products/decode-vin/${vinInput.trim()}`);
+            setDecodedVehicle(data);
+            
+            // Auto-filter based on decoded vehicle
+            const updatedFilters = {
+                ...filters,
+                vin: vinInput.trim(),
+                carBrand: data.make || '',
+                carModel: data.model || '',
+                carYear: data.year || '',
+                page: 1
+            };
+            const cleanParams = {};
+            Object.entries(updatedFilters).forEach(([k, v]) => {
+                if (v) cleanParams[k] = v;
+            });
+            setSearchParams(cleanParams);
+        } catch (err) {
+            setVinError(err.response?.data?.message || 'Không tìm thấy thông tin số VIN này');
+            handleFilterChange('vin', vinInput.trim());
+        } finally {
+            setVinLoading(false);
+        }
+    };
+
+    const clearVinSearch = () => {
+        setVinInput('');
+        setDecodedVehicle(null);
+        setVinError('');
+        const updatedFilters = {
+            ...filters,
+            vin: '',
+            carBrand: '',
+            carModel: '',
+            carYear: '',
+            page: 1
+        };
+        const cleanParams = {};
+        Object.entries(updatedFilters).forEach(([k, v]) => {
+            if (v) cleanParams[k] = v;
+        });
+        setSearchParams(cleanParams);
+    };
 
     useEffect(() => {
         const fetchParts = async () => {
@@ -94,6 +188,11 @@ const Shop = () => {
                 if (filters.brand) params.append('brand', filters.brand);
                 if (filters.minPrice) params.append('minPrice', filters.minPrice);
                 if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
+                if (filters.carBrand) params.append('carBrand', filters.carBrand);
+                if (filters.carModel) params.append('carModel', filters.carModel);
+                if (filters.carYear) params.append('carYear', filters.carYear);
+                if (filters.partType) params.append('partType', filters.partType);
+                if (filters.vin) params.append('vin', filters.vin);
                 params.append('page', filters.page);
                 params.append('limit', 12);
 
@@ -114,7 +213,12 @@ const Shop = () => {
     }, [filters, keyword]);
 
     const handleFilterChange = (key, value) => {
-        const updatedFilters = { ...filters, [key]: value, page: 1 };
+        const updatedFilters = { 
+            ...filters, 
+            [key]: value, 
+            page: key === 'page' ? value : 1,
+            ...(key === 'carBrand' ? { carModel: '' } : {}) 
+        };
         // Clean empty filters before setting search params
         const cleanParams = {};
         Object.entries(updatedFilters).forEach(([k, v]) => {
@@ -124,13 +228,16 @@ const Shop = () => {
     };
 
     const clearFilters = () => {
+        setVinInput('');
+        setDecodedVehicle(null);
+        setVinError('');
         setSearchParams({});
     };
 
     // Helper to get active category name for UI display
-    const getCategoryName = (id) => {
-        const cat = categories.find(c => c._id === id);
-        return cat ? cat.name : 'Tất cả sản phẩm';
+    const getCategoryName = (idOrName) => {
+        const cat = categories.find(c => c._id === idOrName || c.name === idOrName || c.slug === idOrName);
+        return cat ? cat.name : (idOrName || 'Tất cả sản phẩm');
     };
 
     return (
@@ -172,6 +279,122 @@ const Shop = () => {
                     {/* Sidebar Filters - Desktop */}
                     <aside className="hidden lg:block w-64 shrink-0">
                         <div className="sticky top-24 space-y-12">
+                            {/* VIN Lookup */}
+                            <div>
+                                <h3 className="text-xs font-black text-blue-950 uppercase tracking-[0.2em] mb-6 flex items-center justify-between border-b border-slate-50 pb-2">
+                                    Tra cứu VIN
+                                    {(filters.vin || decodedVehicle) && (
+                                        <button onClick={clearVinSearch} className="text-orange-500 normal-case font-black tracking-tight text-[10px]">Xóa</button>
+                                    )}
+                                </h3>
+                                <form onSubmit={handleVinSearch} className="space-y-3">
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            maxLength="17"
+                                            placeholder="Nhập 17 ký tự VIN..."
+                                            value={vinInput}
+                                            onChange={(e) => setVinInput(e.target.value.toUpperCase())}
+                                            className="w-full bg-slate-50 border border-slate-100 p-2.5 pr-8 text-[11px] font-bold text-blue-950 outline-none focus:border-blue-950 transition-colors uppercase"
+                                        />
+                                        <button type="submit" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-950">
+                                            <Search size={14} />
+                                        </button>
+                                    </div>
+                                    {vinError && <p className="text-[10px] text-red-500 font-medium">{vinError}</p>}
+                                    {vinLoading && <p className="text-[10px] text-slate-400 animate-pulse font-medium">Đang giải mã VIN...</p>}
+                                    {decodedVehicle && (
+                                        <div className="bg-blue-50 border border-blue-100 rounded-sm p-3">
+                                            <p className="text-[10px] font-black text-blue-900 uppercase tracking-wider">Đã khớp xe</p>
+                                            <p className="text-xs font-bold text-blue-950 mt-1">{decodedVehicle.make} {decodedVehicle.model} {decodedVehicle.year}</p>
+                                        </div>
+                                    )}
+                                </form>
+                            </div>
+
+                            {/* Car Fitment Filter */}
+                            <div>
+                                <h3 className="text-xs font-black text-blue-950 uppercase tracking-[0.2em] mb-6 flex items-center justify-between border-b border-slate-50 pb-2">
+                                    Tương thích xe
+                                    {(filters.carBrand || filters.carModel || filters.carYear) && (
+                                        <button onClick={() => {
+                                            handleFilterChange('carBrand', '');
+                                            handleFilterChange('carModel', '');
+                                            handleFilterChange('carYear', '');
+                                        }} className="text-orange-500 normal-case font-black tracking-tight text-[10px]">Xóa</button>
+                                    )}
+                                </h3>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hãng xe</p>
+                                        <select
+                                            value={filters.carBrand}
+                                            onChange={(e) => handleFilterChange('carBrand', e.target.value)}
+                                            className="w-full bg-slate-50 border border-slate-100 p-2.5 text-[11px] font-bold text-blue-950 outline-none focus:border-blue-950 transition-colors uppercase cursor-pointer"
+                                        >
+                                            <option value="">-- Tất cả hãng --</option>
+                                            {compatData.brands.map(brand => (
+                                                <option key={brand} value={brand}>{brand}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Dòng xe</p>
+                                        <select
+                                            value={filters.carModel}
+                                            onChange={(e) => handleFilterChange('carModel', e.target.value)}
+                                            disabled={!filters.carBrand}
+                                            className="w-full bg-slate-50 border border-slate-100 p-2.5 text-[11px] font-bold text-blue-950 outline-none focus:border-blue-950 transition-colors uppercase cursor-pointer disabled:opacity-50"
+                                        >
+                                            <option value="">-- Tất cả dòng --</option>
+                                            {filters.carBrand && compatData.modelsByBrand[filters.carBrand]?.map(model => (
+                                                <option key={model} value={model}>{model}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Năm sản xuất</p>
+                                        <select
+                                            value={filters.carYear}
+                                            onChange={(e) => handleFilterChange('carYear', e.target.value)}
+                                            className="w-full bg-slate-50 border border-slate-100 p-2.5 text-[11px] font-bold text-blue-950 outline-none focus:border-blue-950 transition-colors uppercase cursor-pointer"
+                                        >
+                                            <option value="">-- Tất cả năm --</option>
+                                            {compatData.years.map(year => (
+                                                <option key={year} value={year}>{year}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Part Type Origin Filter */}
+                            <div>
+                                <h3 className="text-xs font-black text-blue-950 uppercase tracking-[0.2em] mb-6 flex items-center justify-between border-b border-slate-50 pb-2">
+                                    Nguồn gốc
+                                    {filters.partType && (
+                                        <button onClick={() => handleFilterChange('partType', '')} className="text-orange-500 normal-case font-black tracking-tight text-[10px]">Xóa</button>
+                                    )}
+                                </h3>
+                                <div className="space-y-3">
+                                    {['OEM', 'OES', 'Aftermarket'].map(type => (
+                                        <label key={type} className="flex items-center gap-3 group cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={filters.partType === type}
+                                                onChange={() => handleFilterChange('partType', filters.partType === type ? '' : type)}
+                                                className="w-4 h-4 rounded border-slate-300 text-blue-950 focus:ring-blue-950"
+                                            />
+                                            <span className={`text-[11px] font-black uppercase tracking-wider transition-colors ${filters.partType === type ? 'text-blue-950' : 'text-slate-400 group-hover:text-blue-950'}`}>
+                                                {type}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
                             {/* Brand Filter */}
                             <div>
                                 <h3 className="text-xs font-black text-blue-950 uppercase tracking-[0.2em] mb-6 flex items-center justify-between border-b border-slate-50 pb-2">
@@ -239,19 +462,22 @@ const Shop = () => {
                                     {filters.category && <button onClick={() => handleFilterChange('category', '')} className="text-orange-500 normal-case font-black tracking-tight text-[10px]">Xóa</button>}
                                 </h3>
                                 <div className="flex flex-wrap gap-2">
-                                    {categories.map(cat => (
-                                        <button 
-                                            key={cat._id}
-                                            onClick={() => handleFilterChange('category', filters.category === cat._id ? '' : cat._id)}
-                                            className={`px-4 py-2 rounded-sm text-[10px] font-black uppercase tracking-widest transition-all ${
-                                                filters.category === cat._id 
-                                                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' 
-                                                : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                            }`}
-                                        >
-                                            {cat.name}
-                                        </button>
-                                    ))}
+                                    {categories.map(cat => {
+                                        const isCatActive = filters.category === cat._id || filters.category === cat.name || filters.category === cat.slug;
+                                        return (
+                                            <button 
+                                                key={cat._id}
+                                                onClick={() => handleFilterChange('category', isCatActive ? '' : cat._id)}
+                                                className={`px-4 py-2 rounded-sm text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                    isCatActive 
+                                                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' 
+                                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                                }`}
+                                            >
+                                                {cat.name}
+                                            </button>
+                                        );
+                                    })}
                                     {categories.length === 0 && <p className="text-[10px] text-slate-400 font-medium italic">Đang tải danh mục...</p>}
                                 </div>
                             </div>
@@ -346,6 +572,122 @@ const Shop = () => {
                             </div>
                             
                             <div className="flex-1 overflow-y-auto space-y-12 pr-4 custom-scrollbar">
+                                {/* VIN Lookup - Mobile */}
+                                <div>
+                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 border-b border-slate-50 pb-2 flex items-center justify-between">
+                                        Tra cứu VIN
+                                        {(filters.vin || decodedVehicle) && (
+                                            <button onClick={clearVinSearch} className="text-orange-500 normal-case font-black tracking-tight text-[10px]">Xóa</button>
+                                        )}
+                                    </h3>
+                                    <form onSubmit={handleVinSearch} className="space-y-3">
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                maxLength="17"
+                                                placeholder="Nhập 17 ký tự VIN..."
+                                                value={vinInput}
+                                                onChange={(e) => setVinInput(e.target.value.toUpperCase())}
+                                                className="w-full bg-slate-50 border border-slate-100 p-3 pr-10 text-xs font-bold text-blue-950 outline-none focus:border-blue-950 transition-colors uppercase"
+                                            />
+                                            <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-950">
+                                                <Search size={16} />
+                                            </button>
+                                        </div>
+                                        {vinError && <p className="text-[10px] text-red-500 font-medium">{vinError}</p>}
+                                        {vinLoading && <p className="text-[10px] text-slate-400 animate-pulse font-medium">Đang giải mã VIN...</p>}
+                                        {decodedVehicle && (
+                                            <div className="bg-blue-50 border border-blue-100 rounded-sm p-3">
+                                                <p className="text-[10px] font-black text-blue-900 uppercase tracking-wider">Đã khớp xe</p>
+                                                <p className="text-xs font-bold text-blue-950 mt-1">{decodedVehicle.make} {decodedVehicle.model} {decodedVehicle.year}</p>
+                                            </div>
+                                        )}
+                                    </form>
+                                </div>
+
+                                {/* Car Fitment - Mobile */}
+                                <div>
+                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 border-b border-slate-50 pb-2 flex items-center justify-between">
+                                        Tương thích xe
+                                        {(filters.carBrand || filters.carModel || filters.carYear) && (
+                                            <button onClick={() => {
+                                                handleFilterChange('carBrand', '');
+                                                handleFilterChange('carModel', '');
+                                                handleFilterChange('carYear', '');
+                                            }} className="text-orange-500 normal-case font-black tracking-tight text-[10px]">Xóa</button>
+                                        )}
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hãng xe</p>
+                                            <select
+                                                value={filters.carBrand}
+                                                onChange={(e) => handleFilterChange('carBrand', e.target.value)}
+                                                className="w-full bg-slate-50 border border-slate-100 p-3 text-xs font-bold text-blue-950 outline-none focus:border-blue-950 transition-colors uppercase cursor-pointer"
+                                            >
+                                                <option value="">-- Tất cả hãng --</option>
+                                                {compatData.brands.map(brand => (
+                                                    <option key={brand} value={brand}>{brand}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Dòng xe</p>
+                                            <select
+                                                value={filters.carModel}
+                                                onChange={(e) => handleFilterChange('carModel', e.target.value)}
+                                                disabled={!filters.carBrand}
+                                                className="w-full bg-slate-50 border border-slate-100 p-3 text-xs font-bold text-blue-950 outline-none focus:border-blue-950 transition-colors uppercase cursor-pointer disabled:opacity-50"
+                                            >
+                                                <option value="">-- Tất cả dòng --</option>
+                                                {filters.carBrand && compatData.modelsByBrand[filters.carBrand]?.map(model => (
+                                                    <option key={model} value={model}>{model}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Năm sản xuất</p>
+                                            <select
+                                                value={filters.carYear}
+                                                onChange={(e) => handleFilterChange('carYear', e.target.value)}
+                                                className="w-full bg-slate-50 border border-slate-100 p-3 text-xs font-bold text-blue-950 outline-none focus:border-blue-950 transition-colors uppercase cursor-pointer"
+                                            >
+                                                <option value="">-- Tất cả năm --</option>
+                                                {compatData.years.map(year => (
+                                                    <option key={year} value={year}>{year}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Part Type - Mobile */}
+                                <div>
+                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 border-b border-slate-50 pb-2 flex items-center justify-between">
+                                        Nguồn gốc
+                                        {filters.partType && (
+                                            <button onClick={() => handleFilterChange('partType', '')} className="text-orange-500 normal-case font-black tracking-tight text-[10px]">Xóa</button>
+                                        )}
+                                    </h3>
+                                    <div className="space-y-4">
+                                        {['OEM', 'OES', 'Aftermarket'].map(type => (
+                                            <label key={type} className="flex items-center gap-4 cursor-pointer group">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={filters.partType === type}
+                                                    onChange={() => handleFilterChange('partType', filters.partType === type ? '' : type)}
+                                                    className="w-5 h-5 rounded border-slate-300 text-blue-950 focus:ring-blue-950"
+                                                />
+                                                <span className={`text-[11px] font-black uppercase tracking-wider transition-colors ${filters.partType === type ? 'text-blue-950' : 'text-slate-400'}`}>
+                                                    {type}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+
                                 <div>
                                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 border-b border-slate-50 pb-2">Thương Hiệu</h3>
                                     <div className="space-y-4">
@@ -394,19 +736,23 @@ const Shop = () => {
                                 <div>
                                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-8 border-b border-slate-50 pb-2">Danh Mục</h3>
                                     <div className="flex flex-wrap gap-3">
-                                        {categories.map(cat => (
-                                            <button 
-                                                key={cat._id}
-                                                onClick={() => handleFilterChange('category', filters.category === cat._id ? '' : cat._id)}
-                                                className={`px-5 py-3 rounded-sm text-[10px] font-black uppercase tracking-widest transition-all ${
-                                                    filters.category === cat._id 
-                                                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' 
-                                                    : 'bg-slate-100 text-slate-500'
-                                                }`}
-                                            >
-                                                {cat.name}
-                                            </button>
-                                        ))}
+                                        {categories.map(cat => {
+                                            const isCatActive = filters.category === cat._id || filters.category === cat.name || filters.category === cat.slug;
+                                            return (
+                                                <button 
+                                                    key={cat._id}
+                                                    onClick={() => handleFilterChange('category', isCatActive ? '' : cat._id)}
+                                                    className={`px-5 py-3 rounded-sm text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                        isCatActive 
+                                                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' 
+                                                        : 'bg-slate-100 text-slate-500'
+                                                    }`}
+                                                >
+                                                    {cat.name}
+                                                    
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>

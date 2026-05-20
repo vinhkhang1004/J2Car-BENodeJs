@@ -73,6 +73,22 @@ const autoPartSchema = mongoose.Schema(
             sparse: true,  // allow null/undefined for backward compat
             trim: true,
         },
+        carCompatibilities: [
+            {
+                carBrand: { type: String, trim: true, required: true },
+                carModel: { type: String, trim: true, required: true },
+                carYear: { type: Number, required: true },
+            }
+        ],
+        partType: {
+            type: String,
+            required: true,
+            enum: ['OEM', 'OES', 'Aftermarket'],
+            default: 'Aftermarket',
+        },
+        compatibleVINs: [
+            { type: String, trim: true }
+        ],
         isActive: {
             type: Boolean,
             default: true,
